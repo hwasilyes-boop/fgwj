@@ -1,0 +1,173 @@
+"use client";
+
+import { useEffect, useState, use } from "react";
+import { formatPrice } from "@/lib/utils";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+
+interface OrderDetail {
+  order: {
+    id: string;
+    customerName: string;
+    phone: string;
+    email: string | null;
+    address: string;
+    city: string;
+    postalCode: string | null;
+    notes: string | null;
+    subtotal: number;
+    shippingPrice: number;
+    discount: number;
+    total: number;
+    status: string;
+    couponCode: string | null;
+    createdAt: string;
+  };
+  items: {
+    id: string;
+    productName: string;
+    productImage: string | null;
+    phoneModel: string | null;
+    quantity: number;
+    price: number;
+    total: number;
+  }[];
+}
+
+const statuses = ["pending", "confirmed", "preparing", "shipped", "delivered", "cancelled"];
+
+export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const [data, setData] = useState<OrderDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/admin/orders/${id}`)
+      .then((r) => r.json())
+      .then(setData)
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  async function updateStatus(status: string) {
+    setUpdating(true);
+    const res = await fetch(`/api/admin/orders/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok && data) {
+      setData({ ...data, order: { ...data.order, status } });
+    }
+    setUpdating(false);
+  }
+
+  if (loading) return <div className="text-center py-20 text-dark-muted">Loading...</div>;
+  if (!data) return <div className="text-center py-20 text-red-400">Order not found</div>;
+
+  const { order, items } = data;
+
+  return (
+    <div>
+      <Link href="/admin/orders" className="inline-flex items-center gap-1.5 text-sm text-dark-muted hover:text-white transition-colors mb-6">
+        <ArrowLeft className="w-4 h-4" />
+        Back to Orders
+      </Link>
+
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-white">
+          Order <span className="text-dark-muted font-mono text-lg">{order.id.slice(0, 8)}...</span>
+        </h1>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Customer & Status */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-dark-card rounded-2xl p-6 border border-dark-border">
+            <h2 className="text-lg font-semibold text-white mb-4">Customer Information</h2>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div><span className="text-dark-muted">Name:</span> <span className="text-white ml-2">{order.customerName}</span></div>
+              <div><span className="text-dark-muted">Phone:</span> <span className="text-white ml-2">{order.phone}</span></div>
+              {order.email && <div><span className="text-dark-muted">Email:</span> <span className="text-white ml-2">{order.email}</span></div>}
+              <div><span className="text-dark-muted">City:</span> <span className="text-white ml-2">{order.city}</span></div>
+              <div className="col-span-2"><span className="text-dark-muted">Address:</span> <span className="text-white ml-2">{order.address}</span></div>
+              {order.notes && <div className="col-span-2"><span className="text-dark-muted">Notes:</span> <span className="text-white ml-2">{order.notes}</span></div>}
+            </div>
+          </div>
+
+          {/* Items */}
+          <div className="bg-dark-card rounded-2xl p-6 border border-dark-border">
+            <h2 className="text-lg font-semibold text-white mb-4">Order Items</h2>
+            <div className="space-y-3">
+              {items.map((item) => (
+                <div key={item.id} className="flex items-center gap-4 py-3 border-b border-dark-border/50 last:border-0">
+                  <div className="w-12 h-12 rounded-lg overflow-hidden bg-dark shrink-0">
+                    {item.productImage && <img src={item.productImage} alt="" className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-white">{item.productName}</p>
+                    {item.phoneModel && <p className="text-xs text-dark-muted">{item.phoneModel}</p>}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-white">{formatPrice(item.total)}</p>
+                    <p className="text-xs text-dark-muted">{item.quantity} × {formatPrice(item.price)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Summary & Status */}
+        <div className="space-y-6">
+          <div className="bg-dark-card rounded-2xl p-6 border border-dark-border">
+            <h2 className="text-lg font-semibold text-white mb-4">Update Status</h2>
+            <div className="space-y-2">
+              {statuses.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => updateStatus(s)}
+                  disabled={updating || order.status === s}
+                  className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition-all ${
+                    order.status === s
+                      ? "bg-brand/10 text-brand font-medium"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                  } disabled:opacity-50`}
+                >
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-dark-card rounded-2xl p-6 border border-dark-border">
+            <h2 className="text-lg font-semibold text-white mb-4">Summary</h2>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-gray-400">
+                <span>Subtotal</span>
+                <span className="text-white">{formatPrice(order.subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Shipping</span>
+                <span className="text-white">{formatPrice(order.shippingPrice)}</span>
+              </div>
+              {order.discount > 0 && (
+                <div className="flex justify-between text-brand">
+                  <span>Discount {order.couponCode && `(${order.couponCode})`}</span>
+                  <span>-{formatPrice(order.discount)}</span>
+                </div>
+              )}
+              <div className="border-t border-dark-border pt-2 flex justify-between text-white font-bold text-base">
+                <span>Total</span>
+                <span>{formatPrice(order.total)}</span>
+              </div>
+            </div>
+            <p className="text-xs text-dark-muted mt-3">
+              {new Date(order.createdAt).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
